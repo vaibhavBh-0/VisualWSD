@@ -37,7 +37,7 @@ class ConvNextV2Encoder(nn.Module):
         for param in self.conv_next_model.parameters():
             param.requires_grad = False
 
-        in_dim = param.shape[0]
+        in_dim = list(self.conv_next_model.modules())[-1].weight.shape[0]
         self.embedding_dim = nn.Linear(in_dim, embedding_dim)
         
     def forward(self, x):
