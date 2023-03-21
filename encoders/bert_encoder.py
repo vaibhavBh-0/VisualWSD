@@ -22,3 +22,18 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
+import torch.nn as nn
+from transformers import BertModel
+class BERTEncoder(nn.Module):
+    def __init__(self, embedding_dim: int, model_path: str, tokenizer_len):
+        super(BERTEncoder, self).__init__()
+
+        self.bert_model = BertModel.from_pretrained(model_path)
+        self.bert_model.resize_token_embeddings(tokenizer_len)
+        in_dim = list(self.bert_model.modules())[-2].weight.shape[0]
+        self.embedding_dim = nn.Linear(in_dim, embedding_dim)
+
+    def forward(self, x):
+        x = self.bert_model(x)
+        x = self.embedding_dim(x)
+        return x
