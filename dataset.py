@@ -29,7 +29,7 @@ import torch
 from enum import Enum
 import pandas as pd
 from torch.utils.data import Dataset
-from torchvision.io import read_image
+from torchvision.io import read_image, ImageReadMode
 from transformers.image_processing_utils import BaseImageProcessor
 from transformers.tokenization_utils_fast import PreTrainedTokenizerFast
 
@@ -60,7 +60,7 @@ class VWSDDataset(Dataset):
         if self._config != DatasetConfig.TEST:
             df_gold = pd.read_csv(self.gold_data_path, sep='\t', names=['gold'])
 
-            df = pd.concat([df, df_gold], axis=2)
+            df = pd.concat([df, df_gold], axis=1)
             df = self.dehyphenate(df)
 
             sampling_idx = list(range(len(df)))
@@ -111,7 +111,8 @@ class VWSDDataset(Dataset):
         img_paths = data_point[2:] if self._config == DatasetConfig.TEST else data_point[2:-1]
 
         imgs = [
-            self.image_processor(read_image(os.path.join(self.img_data_path, img_path)), return_tensors='pt')
+            self.image_processor(read_image(os.path.join(self.img_data_path, img_path), mode=ImageReadMode.RGB),
+                                 return_tensors='pt')
             for img_path in img_paths
         ]
 
@@ -119,11 +120,11 @@ class VWSDDataset(Dataset):
 
         if self._config != DatasetConfig.TEST:
             gold_path = data_point[-1]
-            for img_path in img_paths:
+            for idx, img_path in enumerate(img_paths):
                 if img_path == gold_path:
-                    gold_example[:, img_path] = 1.0
+                    gold_example[:, idx] = 1.0
                     break
 
-    # TODO: Testing whether this scales to batching in dataloader.
+        # TODO: Testing whether this scales to batching in dataloader.
 
         return text_input, imgs, gold_example
