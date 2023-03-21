@@ -32,7 +32,12 @@ class ConvNextV2Encoder(nn.Module):
         super(ConvNextV2Encoder, self).__init__()
 
         self.conv_next_model = ConvNextV2Model.from_pretrained(model_path)
-        in_dim = list(self.conv_next_model.parameters())[-1].shape[0]
+
+        # Freeze the encoder model.
+        for param in self.conv_next_model.parameters():
+            param.requires_grad = False
+
+        in_dim = param.shape[0]
         self.embedding_dim = nn.Linear(in_dim, embedding_dim)
         
     def forward(self, x):
