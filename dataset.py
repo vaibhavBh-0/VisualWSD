@@ -26,10 +26,11 @@
 import os
 import random
 import torch
+import numpy as np
+import cv2
 from enum import Enum
 import pandas as pd
 from torch.utils.data import Dataset
-from torchvision.io import read_image, ImageReadMode
 from transformers.image_processing_utils import BaseImageProcessor
 from transformers.tokenization_utils_fast import PreTrainedTokenizerFast
 
@@ -52,7 +53,8 @@ class VWSDDataset(Dataset):
         self.image_processor = image_processor
         self.fast_tokenizer = tokenizer
         self.sep = '[CONDITIONED]'
-        self.fast_tokenizer.add_tokens(new_tokens=self.sep, special_tokens=False)
+        self.fast_tokenizer.add_tokens(new_tokens=self.sep, special_tokens=True)
+        self.model_max_length = self.fast_tokenizer.model_max_length
 
         columns = ['word', 'context'] + [f'{a}{idx}' for idx, a in enumerate(['sample'] * 10, start=1)]
         df = pd.read_csv(self.wsd_data_path, sep='\t', names=columns)
@@ -85,6 +87,19 @@ class VWSDDataset(Dataset):
 
         return df.replace('-', ' ', regex=True)
 
+    @staticmethod
+    def load_image(path) -> torch.Tensor:
+        """
+        Load image using cv2 as a PyTorch Tensor.
+        :param path: Image path
+        :return: An image PyTorch Tensor.
+        """
+        img = cv2.imread(path, flags=cv2.IMREAD_COLOR)
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        img = torch.from_numpy(np.transpose(img, axes=[2, 0, 1]))
+
+        return img
+
     def __len__(self):
         return len(self.sampling_idx)
 
@@ -97,34 +112,61 @@ class VWSDDataset(Dataset):
         data_point = self.df.iloc[sampled_idx]
         word, context = data_point[:2]
 
-        # TODO: Need to see what shall be the separating token between the word and context if any.
         text = f'{word}{self.sep}{context}'
 
         # Tokenizer gives a dictionary of input_ids, token_type_ids, attention_mask.
-        text_input = self.fast_tokenizer(text, return_tensors='pt')
+        text_input = self.fast_tokenizer(text, return_tensors='pt', padding='max_length', truncation=True,
+                                         max_length=self.model_max_length)
+
+        text_input = {key: value.squeeze() for key, value in text_input.items()}
 
         # TODO: Current Mining Scheme is only going as per the dataset.
         #  We can go for more negative image examples based on the "word" not conditioned on "context".
 
-        # image processor gives a dictionary of pixel_values.
-        # imgs_input = [self.image_processor(img, return_tensors='pt')['pixel_values'] for img in imgs]
         img_paths = data_point[2:] if self._config == DatasetConfig.TEST else data_point[2:-1]
 
-        imgs = [
-            self.image_processor(read_image(os.path.join(self.img_data_path, img_path), mode=ImageReadMode.RGB),
-                                 return_tensors='pt')
+        imgs = self.image_processor.preprocess([
+            self.load_image(os.path.join(self.img_data_path, img_path))
             for img_path in img_paths
-        ]
+        ], return_tensors='pt')
 
-        gold_example = torch.zeros((1, len(imgs)))
+        gold_example = torch.zeros(len(imgs.pixel_values))
 
         if self._config != DatasetConfig.TEST:
             gold_path = data_point[-1]
+
             for idx, img_path in enumerate(img_paths):
                 if img_path == gold_path:
-                    gold_example[:, idx] = 1.0
+                    gold_example[idx] = 1.0
                     break
 
-        # TODO: Testing whether this scales to batching in dataloader.
-
         return text_input, imgs, gold_example
+
+
+def test_dataset():
+    # Testing dataset with DataLoader.
+    base_path = '' #os.path.join('C:\\', 'Users', 'Vaibhav', 'Downloads', 'semeval-2023-task-1-V-WSD-train-v1')
+    img_path = os.path.join(base_path, 'train_v1', 'train_images_v1')
+    wsd_path = os.path.join(base_path, 'train_v1', 'train.data.v1.txt')
+    gold_path = os.path.join(base_path, 'train_v1', 'train.gold.v1.txt')
+
+    from transformers import BertTokenizerFast, ConvNextImageProcessor
+
+    img_processor = ConvNextImageProcessor()
+    tokenizer = BertTokenizerFast.from_pretrained("bert-base-uncased")
+
+    dataset = VWSDDataset(img_data_path=img_path, wsd_data_path=wsd_path, gold_data_path=gold_path,
+                          config=DatasetConfig.TRAIN, image_processor=img_processor, tokenizer=tokenizer,
+                          split=1.0)
+
+    from torch.utils.data import DataLoader
+
+    train_loader = DataLoader(dataset=dataset, batch_size=5, shuffle=False)
+
+    for idx, (txt, imgs, gold_example) in enumerate(train_loader, start=1):
+        print(f'Text shape {txt["input_ids"].shape} Image shape {imgs.shape} gold example shape {gold_example.shape}')
+        break
+
+
+if __name__ == '__main__':
+    test_dataset()
