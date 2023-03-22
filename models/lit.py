@@ -25,5 +25,5 @@
 import torch.nn as nn
 
 
-class LiT(nn.module):
+class LiT(nn.Module):
     pass;
