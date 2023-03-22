@@ -1,8 +1,8 @@
-# bert_encoder.py
+# dataset.py
 #
-# Created by Vaibhav Bhargava on 20-03-2023
-# 
-# Copyright © 2023 Vaibhav Bhargava
+# Created by Sharad Chandakacherla on 3/21/23
+#
+# Copyright © 2023 Sharad Chandakacherla
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -23,17 +23,7 @@
 # THE SOFTWARE.
 
 import torch.nn as nn
-from transformers import BertModel
-class BERTEncoder(nn.Module):
-    def __init__(self, embedding_dim: int, model_path: str, tokenizer_len):
-        super(BERTEncoder, self).__init__()
 
-        self.bert_model = BertModel.from_pretrained(model_path)
-        self.bert_model.resize_token_embeddings(tokenizer_len)
-        in_dim = list(self.bert_model.modules())[-2].weight.shape[0]
-        self.embedding_dim = nn.Linear(in_dim, embedding_dim)
 
-    def forward(self, x):
-        x = self.bert_model(x)
-        x = self.embedding_dim(x)
-        return x
+class LiT(nn.module):
+    pass;
