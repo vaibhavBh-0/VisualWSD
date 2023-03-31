@@ -165,6 +165,8 @@ class Trainer:
         running_loss, running_mrr, running_hit_rate = 0.0, 0.0, 0.0
 
         for epoch in range(self.current_epoch, self.epochs):
+            self.model.train()
+
             with tqdm(total=len(self.train_dataloader), desc=f'Training {epoch}/{self.epochs}', colour='cyan') as bar:
                 for idx, (txt, imgs, gold_example) in enumerate(self.train_dataloader, start=1):
                     self.optim.zero_grad()
@@ -188,5 +190,21 @@ class Trainer:
             # LR Scheduler Chaining.
             self.optim_lr_scheduler.step()
             self.cosine_annealing_lr.step()
+
+            running_loss, running_mrr, running_hit_rate = 0.0, 0.0, 0.0
+
+            self.model.eval()
+
+            with tqdm(total=len(self.val_dataloader), desc=f'Validation {epoch}/{self.epochs}', colour='red') as bar:
+                for idx, (txt, imgs, gold_example) in enumerate(self.val_dataloader, start=1):
+                    txt = {key: val.to(self.device, non_blocking=True) for key, val in txt.items()}
+                    imgs = imgs['pixel_values'].to(self.device, non_blocking=True)
+                    gold_example = gold_example.to(self.device, non_blocking=True)
+
+                    out = self.model(text_data=txt, image_data=imgs)
+
+                    # TODO - Compute Validation Metrics for validation. Record on the three running metrics variables.
+
+                    bar.update()
 
             running_loss, running_mrr, running_hit_rate = 0.0, 0.0, 0.0
