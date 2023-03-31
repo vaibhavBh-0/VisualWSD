@@ -28,8 +28,10 @@ import torch
 import torch.nn as nn
 from tqdm import tqdm
 from torch.utils.data import DataLoader
+from torch.optim.lr_scheduler import CosineAnnealingLR
 
 from transformers import BertTokenizerFast, ConvNextImageProcessor
+from transformers.optimization import Adafactor, AdafactorSchedule, get_cosine_schedule_with_warmup
 
 from dataset import VWSDDataset, DatasetConfig
 
@@ -58,12 +60,15 @@ class Trainer:
 
         self.device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
-        embedding_dim = kwargs.get('embedding_dim', 512)
+        # https://github.com/google-research/big_vision/blob/47ac2fd075fcb66cadc0e39bd959c78a6080070d/big_vision/models/proj/image_text/two_towers.py#L33
+        embedding_dim = kwargs.get('embedding_dim', 128)
         scale_factor = kwargs.get('scale_factor', 2.6592)
         train_split_ratio = kwargs.get('train_split_ratio', 0.8)
         splitting_seed = kwargs.get('splitting_seed', 42)
+
         self.epochs = kwargs.get('epochs', 10)
         self.current_epoch = kwargs.get('current_epoch', 1)
+        self.lr = kwargs.get('lr', 0.001)
 
         self.train_batch_size = kwargs.get('train_batch_size', 5)
         self.val_batch_size = kwargs.get('val_batch_size', 5)
@@ -91,7 +96,20 @@ class Trainer:
                          tokenizer_len=len(tokenizer), vision_encoder=vision_enc, text_encoder=text_enc,
                          logit_scale_init_value=scale_factor).to(device=self.device, non_blocking=True)
 
-        self._load_latest_weights()
+        self.optim = Adafactor(self.model.parameters(), warmup_init=True)
+
+        self.optim_lr_scheduler = AdafactorSchedule(optimizer=self.optim, initial_lr=self.lr)
+
+        # CosineAnnealingLR(self.optim, )
+
+        # Cosine Annealing - As per the authors of LiT.
+        warm_up_steps = 10000
+        total_train_steps = len(self.train_dataloader)
+
+        self.cosine_annealing_lr = get_cosine_schedule_with_warmup(self.optim, num_warmup_steps=warm_up_steps,
+                                                                   num_training_steps=total_train_steps)
+
+        self._load_model_state()
 
     @staticmethod
     def _select_text_encoder(text_config: TextConfig):
@@ -113,14 +131,35 @@ class Trainer:
         else:
             raise NotImplementedError('Vision Encoder not implemented.')
 
-    def _load_latest_weights(self):
+    def _load_model_state(self, index=-1):
+        """
+        Load the model state from checkpoints if any.
+        :param index: Loads the checkpoint based on created date index. Defaults to -1 to load the latest checkpoint.
+        """
         items = os.listdir(self.model_save_path)
         if items:
-            self.current_epoch = 1 + len(items)
-            latest_weights = sorted(items, key=os.path.getctime, reverse=True)[0]
-            weight_path = os.path.join(self.model_save_path, latest_weights)
-            self.model.load_state_dict(torch.load(weight_path, map_location=self.device), strict=True)
+            latest_item = sorted(items, key=os.path.getctime)[index]
+            checkpoint_path = os.path.join(self.model_save_path, latest_item)
+
+            checkpoint = torch.load(checkpoint_path, map_location=self.device)
+            self.model.load_state_dict(checkpoint['model'], strict=True)
             self.model.train()
+
+            self.optim.load_state_dict(checkpoint['optim'])
+            self.optim_lr_scheduler.load_state_dict(checkpoint['ada_factor_scheduler'])
+            self.cosine_annealing_lr.load_state_dict(checkpoint['cosine_annealing_scheduler'])
+
+            self.current_epoch = 1 + checkpoint['epoch']
+
+    def _save_model_state(self, current_epoch: int):
+        path = os.path.join(self.model_save_path, f'{current_epoch}.pt')
+        torch.save({
+            'epoch': current_epoch,
+            'model': self.model.state_dict(),
+            'optim': self.optim.state_dict(),
+            'ada_factor_scheduler': self.optim_lr_scheduler.state_dict(),
+            'cosine_annealing_scheduler': self.cosine_annealing_lr.state_dict()
+        }, f=path)
 
     def train(self):
         running_loss, running_mrr, running_hit_rate = 0.0, 0.0, 0.0
@@ -129,11 +168,23 @@ class Trainer:
             with tqdm(total=len(self.train_dataloader), desc=f'Training {epoch}/{self.epochs}', colour='cyan') as bar:
                 for idx, (txt, imgs, gold_example) in enumerate(self.train_dataloader, start=1):
                     # TODO: - Place tensors to devices.
+                    txt = {key: val.to(self.device, non_blocking=True) for key, val in txt.items()}
+                    imgs = imgs['pixel_values'].to(self.device, non_blocking=True)
+                    gold_example = gold_example.to(self.device, non_blocking=True)
+
                     # TODO: - Model takes text_data as a dict. image_data as a tensor.
+                    out = self.model(text_data=txt, image_data=imgs)
 
                     # TODO: - Compute LiT/CLIP loss.
+
+                    # Optim step.
+                    self.optim.step()
                     # TODO: - Develop Metrics - MRR and Hit Rate @ 1.
 
                     bar.update()
+
+            # LR Scheduler Chaining.
+            self.optim_lr_scheduler.step()
+            self.cosine_annealing_lr.step()
 
             running_loss, running_mrr, running_hit_rate = 0.0, 0.0, 0.0
