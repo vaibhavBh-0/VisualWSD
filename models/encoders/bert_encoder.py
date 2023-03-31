@@ -36,6 +36,6 @@ class BERTEncoder(nn.Module):
         self.embedding_dim = nn.Linear(in_dim, embedding_dim)
 
     def forward(self, x):
-        x = self.bert_model(x)
+        x = self.bert_model(**x)['pooler_output']
         x = self.embedding_dim(x)
         return x
