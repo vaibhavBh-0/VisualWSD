@@ -20,13 +20,15 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
+
+from typing import Type
 import torch
 import torch.nn as nn
 
 
 class LiT(nn.Module):
     def __init__(self, embedding_dim: int, vision_model_path: str, text_model_path: str,
-                 tokenizer_len: int, vision_encoder: nn.Module, text_encoder: nn.Module,
+                 tokenizer_len: int, vision_encoder: Type[nn.Module], text_encoder: Type[nn.Module],
                  logit_scale_init_value=2.6592):
         super(LiT, self).__init__()
         self.vision_encoder = vision_encoder(embedding_dim=embedding_dim, model_path=vision_model_path)

@@ -41,7 +41,7 @@ class ConvNextV2Encoder(nn.Module):
         self.embedding_dim = nn.Linear(in_dim, embedding_dim)
         
     def forward(self, x):
-        x = self.conv_next_model(x)
+        x = self.conv_next_model(x)['pooler_output']
         x = self.embedding_dim(x)
 
         return x

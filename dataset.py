@@ -164,7 +164,7 @@ def test_dataset():
     train_loader = DataLoader(dataset=dataset, batch_size=5, shuffle=False)
 
     for idx, (txt, imgs, gold_example) in enumerate(train_loader, start=1):
-        print(f'Text shape {txt["input_ids"].shape} Image shape {imgs.shape} gold example shape {gold_example.shape}')
+        print(f'Text shape {txt["input_ids"].shape} Image shape {imgs["pixel_values"].shape} gold example shape {gold_example.shape}')
         break
 
 
