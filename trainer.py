@@ -167,6 +167,8 @@ class Trainer:
         for epoch in range(self.current_epoch, self.epochs):
             with tqdm(total=len(self.train_dataloader), desc=f'Training {epoch}/{self.epochs}', colour='cyan') as bar:
                 for idx, (txt, imgs, gold_example) in enumerate(self.train_dataloader, start=1):
+                    self.optim.zero_grad()
+
                     # TODO: - Place tensors to devices.
                     txt = {key: val.to(self.device, non_blocking=True) for key, val in txt.items()}
                     imgs = imgs['pixel_values'].to(self.device, non_blocking=True)
