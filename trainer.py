@@ -79,8 +79,8 @@ class Trainer:
                                   config=DatasetConfig.VAL, image_processor=img_processor, tokenizer=tokenizer,
                                   split=train_split_ratio, seed=splitting_seed)
 
-        self.train_dataloader = DataLoader(dataset=train_dataset, batch_size=5, shuffle=True)
-        self.val_dataloader = DataLoader(dataset=val_dataset, batch_size=5, shuffle=False)
+        self.train_dataloader = DataLoader(dataset=train_dataset, batch_size=self.train_batch_size, shuffle=True)
+        self.val_dataloader = DataLoader(dataset=val_dataset, batch_size=self.val_batch_size, shuffle=False)
 
         # TODO: Choose optimizer for LiT/CLIP - training.
         #  LiT uses modified AdaFactor. - https://github.com/google-research/big_vision/blob/47ac2fd075fcb66cadc0e39bd959c78a6080070d/big_vision/optax.py#L157
@@ -123,19 +123,17 @@ class Trainer:
             self.model.train()
 
     def train(self):
-        for epoch in range(self.current_epoch, self.epochs):
-            running_loss, running_mrr, running_hit_rate = [], [], []
+        running_loss, running_mrr, running_hit_rate = 0.0, 0.0, 0.0
 
-            with tqdm(total=len(self.train_dataloader)) as bar:
+        for epoch in range(self.current_epoch, self.epochs):
+            with tqdm(total=len(self.train_dataloader), desc=f'Training {epoch}/{self.epochs}', colour='cyan') as bar:
                 for idx, (txt, imgs, gold_example) in enumerate(self.train_dataloader, start=1):
                     # TODO: - Place tensors to devices.
                     # TODO: - Model takes text_data as a dict. image_data as a tensor.
 
-                    # TODO: - Compute CLIP loss.
+                    # TODO: - Compute LiT/CLIP loss.
                     # TODO: - Develop Metrics - MRR and Hit Rate @ 1.
 
                     bar.update()
 
-            running_loss.clear()
-            running_mrr.clear()
-            running_hit_rate.clear()
+            running_loss, running_mrr, running_hit_rate = 0.0, 0.0, 0.0
