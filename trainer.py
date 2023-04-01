@@ -151,14 +151,15 @@ class Trainer:
 
             self.current_epoch = 1 + checkpoint['epoch']
 
-    def _save_model_state(self, current_epoch: int):
+    def _save_model_state(self, current_epoch: int, **kwargs):
         path = os.path.join(self.model_save_path, f'{current_epoch}.pt')
         torch.save({
             'epoch': current_epoch,
             'model': self.model.state_dict(),
             'optim': self.optim.state_dict(),
             'ada_factor_scheduler': self.optim_lr_scheduler.state_dict(),
-            'cosine_annealing_scheduler': self.cosine_annealing_lr.state_dict()
+            'cosine_annealing_scheduler': self.cosine_annealing_lr.state_dict(),
+            **kwargs
         }, f=path)
 
     def train(self):
@@ -192,6 +193,14 @@ class Trainer:
             # LR Scheduler Chaining.
             self.optim_lr_scheduler.step()
             self.cosine_annealing_lr.step()
+
+            extra = {
+                'loss': running_loss / len(self.train_dataloader),
+                'mrr': running_mrr / len(self.train_dataloader),
+                'hit_rate': running_hit_rate / len(self.train_dataloader)
+            }
+
+            self._save_model_state(current_epoch=epoch, **extra)
 
             running_loss, running_mrr, running_hit_rate = 0.0, 0.0, 0.0
 
