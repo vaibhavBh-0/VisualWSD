@@ -30,7 +30,7 @@ from tqdm import tqdm
 from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import CosineAnnealingLR
 
-from transformers import BertTokenizerFast, ConvNextImageProcessor
+from transformers import BertTokenizerFast, ConvNextImageProcessor, ConvNextFeatureExtractor
 from transformers.optimization import Adafactor, AdafactorSchedule, get_cosine_schedule_with_warmup
 
 from dataset import VWSDDataset, DatasetConfig
@@ -125,7 +125,7 @@ class Trainer:
     def _select_img_encoder(vision_config: VisionConfig):
         if vision_config == VisionConfig.CONV_NEXT_V2:
             vision_model_path = "facebook/convnextv2-tiny-1k-224"
-            processor = ConvNextImageProcessor()
+            processor = ConvNextImageProcessor().from_pretrained(vision_model_path)
 
             return ConvNextV2Encoder, vision_model_path, processor
         else:
@@ -197,18 +197,19 @@ class Trainer:
 
             self.model.eval()
 
-            with tqdm(total=len(self.val_dataloader), colour='red', leave=False) as bar:
-                for idx, (txt, imgs, gold_example) in enumerate(self.val_dataloader, start=1):
-                    txt = {key: val.to(self.device, non_blocking=True) for key, val in txt.items()}
-                    imgs = imgs['pixel_values'].to(self.device, non_blocking=True)
-                    gold_example = gold_example.to(self.device, non_blocking=True)
+            with torch.no_grad():
+                with tqdm(total=len(self.val_dataloader), colour='red', leave=False) as bar:
+                    for idx, (txt, imgs, gold_example) in enumerate(self.val_dataloader, start=1):
+                        txt = {key: val.to(self.device, non_blocking=True) for key, val in txt.items()}
+                        imgs = imgs['pixel_values'].to(self.device, non_blocking=True)
+                        gold_example = gold_example.to(self.device, non_blocking=True)
 
-                    out = self.model(text_data=txt, image_data=imgs)
+                        out = self.model(text_data=txt, image_data=imgs)
 
-                    # TODO - Compute Validation Metrics for validation. Record on the three running metrics variables.
+                        # TODO - Compute Validation Metrics for validation. Record on the three running metrics variables.
 
-                    bar.update()
-                    bar.set_description(f'Validation {epoch}/{self.epochs} - Loss {running_loss / idx:.3f} '
-                                        f'MRR {running_mrr / idx:.3f} HR {running_hit_rate / idx :.3f}')
+                        bar.update()
+                        bar.set_description(f'Validation {epoch}/{self.epochs} - Loss {running_loss / idx:.3f} '
+                                            f'MRR {running_mrr / idx:.3f} HR {running_hit_rate / idx :.3f}')
 
             running_loss, running_mrr, running_hit_rate = 0.0, 0.0, 0.0
