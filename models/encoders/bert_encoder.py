@@ -27,7 +27,7 @@ from transformers import BertModel
 
 
 class BERTEncoder(nn.Module):
-    def __init__(self, embedding_dim: int, model_path: str, tokenizer_len):
+    def __init__(self, embedding_dim: int, model_path: str, tokenizer_len: int):
         super(BERTEncoder, self).__init__()
 
         self.bert_model = BertModel.from_pretrained(model_path)
