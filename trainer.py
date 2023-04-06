@@ -164,6 +164,7 @@ class Trainer:
 
     def train(self):
         running_loss, running_mrr, running_hit_rate = 0.0, 0.0, 0.0
+        IMG_SAMPLES = 10
 
         for epoch in range(self.current_epoch, self.epochs):
             self.model.train()
@@ -172,13 +173,20 @@ class Trainer:
                 for idx, (txt, imgs, gold_example) in enumerate(self.train_dataloader, start=1):
                     self.optim.zero_grad()
 
-                    # TODO: - Place tensors to devices.
-                    txt = {key: val.to(self.device, non_blocking=True) for key, val in txt.items()}
-                    imgs = imgs['pixel_values'].to(self.device, non_blocking=True)
-                    gold_example = gold_example.to(self.device, non_blocking=True)
+                    # txts = {key: val.to(self.device, non_blocking=True).repeat_interleave(repeats=IMG_SAMPLES, dim=0)[:2, :]
+                    #         for key, val in txt.items()}
+                    txts = {
+                        key: val.to(self.device, non_blocking=True)#[:2, :]
+                        for key, val in txt.items()
+                    }
 
-                    # TODO: - Model takes text_data as a dict. image_data as a tensor.
-                    out = self.model(text_data=txt, image_data=imgs)
+                    img_shape = imgs['pixel_values'].shape[2:]
+
+                    images = imgs['pixel_values'].to(self.device, non_blocking=True).reshape((-1, *img_shape))
+                    gold_examples = gold_example.to(self.device, non_blocking=True)\
+                        .repeat_interleave(repeats=IMG_SAMPLES, dim=0)
+
+                    out = self.model(text_data=txts, image_data=images, img_samples=IMG_SAMPLES)
 
                     # TODO: - Compute LiT/CLIP loss.
 

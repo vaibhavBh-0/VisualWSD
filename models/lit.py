@@ -36,9 +36,11 @@ class LiT(nn.Module):
                                          tokenizer_len=tokenizer_len)
         self.logit_scale = nn.Parameter(torch.ones([]) * logit_scale_init_value)
 
-    def forward(self, text_data, image_data):
+    def forward(self, text_data, image_data, img_samples: int):
         text_projection = self.text_encoder(text_data)
         normalized_text = nn.functional.normalize(text_projection, p=2, dim=-1)
+        # Repeating tensors to avoid repeated forward pass on text encoder.
+        normalized_text = normalized_text.repeat((img_samples, 1))
         image_projection = self.vision_encoder(image_data)
         normalized_image = nn.functional.normalize(image_projection, p=2, dim=-1)
         logit_scale = self.logit_scale.exp()
