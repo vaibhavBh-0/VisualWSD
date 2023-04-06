@@ -133,14 +133,14 @@ class VWSDDataset(Dataset):
             for img_path in img_paths
         ], return_tensors='pt')
 
-        gold_example = torch.zeros(len(imgs.pixel_values))
+        gold_example = 0
 
         if self._config != DatasetConfig.TEST:
             gold_path = data_point[-1]
 
             for idx, img_path in enumerate(img_paths):
                 if img_path == gold_path:
-                    gold_example[idx] = 1.0
+                    gold_example += idx
                     break
 
         return text_input, imgs, gold_example

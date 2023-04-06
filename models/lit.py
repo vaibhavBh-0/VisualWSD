@@ -39,11 +39,21 @@ class LiT(nn.Module):
     def forward(self, text_data, image_data, img_samples: int):
         text_projection = self.text_encoder(text_data)
         normalized_text = nn.functional.normalize(text_projection, p=2, dim=-1)
-        # Repeating tensors to avoid repeated forward pass on text encoder.
-        normalized_text = normalized_text.repeat((img_samples, 1))
+
         image_projection = self.vision_encoder(image_data)
         normalized_image = nn.functional.normalize(image_projection, p=2, dim=-1)
         logit_scale = self.logit_scale.exp()
-        inner_product = torch.matmul(normalized_text, normalized_image.t()) * logit_scale
 
-        return inner_product
+        text_batch_size = normalized_text.shape[0]
+
+        # (text_batch, img_samples x image_batch); text_batch == image_batch
+        text_per_image_logit = torch.matmul(normalized_text, normalized_image.t()) * logit_scale
+
+        # text_batch, img_samples
+        out = torch.zeros((text_batch_size, img_samples), device=text_per_image_logit.device)
+
+        for text_idx in range(text_batch_size):
+            img_idx = img_samples * text_idx
+            out[text_idx, :] += text_per_image_logit[text_idx, img_idx: img_idx + img_samples]
+
+        return out

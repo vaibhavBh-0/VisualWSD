@@ -166,7 +166,7 @@ class Trainer:
         running_loss, running_mrr, running_hit_rate = 0.0, 0.0, 0.0
         IMG_SAMPLES = 10
 
-        for epoch in range(self.current_epoch, self.epochs):
+        for epoch in range(self.current_epoch, self.epochs + 1):
             self.model.train()
 
             with tqdm(total=len(self.train_dataloader), colour='cyan', leave=True) as bar:
@@ -183,8 +183,7 @@ class Trainer:
                     img_shape = imgs['pixel_values'].shape[2:]
 
                     images = imgs['pixel_values'].to(self.device, non_blocking=True).reshape((-1, *img_shape))
-                    gold_examples = gold_example.to(self.device, non_blocking=True)\
-                        .repeat_interleave(repeats=IMG_SAMPLES, dim=0)
+                    gold_examples = gold_example.to(self.device, non_blocking=True)
 
                     out = self.model(text_data=txts, image_data=images, img_samples=IMG_SAMPLES)
 
