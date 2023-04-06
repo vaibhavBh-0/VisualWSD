@@ -25,12 +25,10 @@
 import os
 from enum import Enum
 import torch
-import torch.nn as nn
 from tqdm import tqdm
 from torch.utils.data import DataLoader
-from torch.optim.lr_scheduler import CosineAnnealingLR
 
-from transformers import BertTokenizerFast, ConvNextImageProcessor, ConvNextFeatureExtractor
+from transformers import BertTokenizerFast, ConvNextImageProcessor
 from transformers.optimization import Adafactor, AdafactorSchedule, get_cosine_schedule_with_warmup
 
 from dataset import VWSDDataset, DatasetConfig
@@ -38,6 +36,8 @@ from dataset import VWSDDataset, DatasetConfig
 from models.lit import LiT
 from models.encoders.bert_encoder import BERTEncoder
 from models.encoders.convnextv2_encoder import ConvNextV2Encoder
+from loss import LiTLoss
+from metrics import RuntimeMetrics
 
 
 class TextConfig(Enum):
@@ -94,6 +94,7 @@ class Trainer:
                                          shuffle=False, collate_fn=val_dataset.collate_dataset,
                                          num_workers=num_workers)
 
+        self.loss_criterion = LiTLoss()
         # TODO: Choose optimizer for LiT/CLIP - training.
         #  LiT uses modified AdaFactor. - https://github.com/google-research/big_vision/blob/47ac2fd075fcb66cadc0e39bd959c78a6080070d/big_vision/optax.py#L157
         #  CLIP uses Adam.
@@ -141,7 +142,7 @@ class Trainer:
     def _load_model_state(self, index=-1):
         """
         Load the model state from checkpoints if any.
-        :param index: Loads the checkpoint based on created date index. Defaults to -1 to load the latest checkpoint.
+        param index: Loads the checkpoint based on created date index. Defaults to -1 to load the latest checkpoint.
         """
         items = os.listdir(self.model_save_path)
         if items:
@@ -170,7 +171,7 @@ class Trainer:
         }, f=path)
 
     def train(self):
-        running_loss, running_mrr, running_hit_rate = 0.0, 0.0, 0.0
+        running_loss, running_rr, running_hit_rate = 0.0, 0.0, 0.0
         IMG_SAMPLES = 10
 
         for epoch in range(self.current_epoch, self.epochs + 1):
@@ -182,15 +183,21 @@ class Trainer:
 
                     out = self.model(text_data=txt, image_data=imgs, img_samples=IMG_SAMPLES)
 
-                    # TODO: - Compute LiT/CLIP loss.
+                    loss = self.loss_criterion(out)
+                    running_loss += loss.item()
+
+                    loss.backward()
 
                     # Optim step.
                     self.optim.step()
-                    # TODO: - Develop Metrics - MRR and Hit Rate @ 1.
 
+                    batch_wise_rr = RuntimeMetrics.reciprocal_rank_per_batch(logit_scores=out, gold_indices=gold_example, top_k=IMG_SAMPLES).item()
+                    running_rr += batch_wise_rr
+                    batch_wise_hit_rate = RuntimeMetrics.hit_rate_at1(logit_scores=out, gold_indices=gold_example).item()
+                    running_hit_rate += batch_wise_hit_rate
                     bar.update()
                     bar.set_description(f'Training {epoch}/{self.epochs} - Loss {running_loss / idx:.3f} '
-                                        f'MRR {running_mrr / idx:.3f} HR {running_hit_rate / idx :.3f}')
+                                        f'MRR {running_rr / idx:.3f} HR {running_hit_rate / idx :.3f}')
 
             # LR Scheduler Chaining.
             self.optim_lr_scheduler.step()
@@ -198,13 +205,13 @@ class Trainer:
 
             extra = {
                 'loss': running_loss / len(self.train_dataloader),
-                'mrr': running_mrr / len(self.train_dataloader),
+                'mrr': running_rr / len(self.train_dataloader),
                 'hit_rate': running_hit_rate / len(self.train_dataloader)
             }
 
             self._save_model_state(current_epoch=epoch, **extra)
 
-            running_loss, running_mrr, running_hit_rate = 0.0, 0.0, 0.0
+            running_loss, running_rr, running_hit_rate = 0.0, 0.0, 0.0
 
             self.model.eval()
 
@@ -213,10 +220,18 @@ class Trainer:
                     for idx, (txt, imgs, gold_example) in enumerate(self.val_dataloader, start=1):
                         out = self.model(text_data=txt, image_data=imgs)
 
-                        # TODO - Compute Validation Metrics for validation. Record on the three running metrics variables.
+                        loss = self.loss_criterion(out)
+                        running_loss += loss.item()
 
+                        batch_wise_rr = RuntimeMetrics.reciprocal_rank_per_batch(logit_scores=out,
+                                                                                 gold_indices=gold_example,
+                                                                                 top_k=IMG_SAMPLES).item()
+                        running_rr += batch_wise_rr
+                        batch_wise_hit_rate = RuntimeMetrics.hit_rate_at1(logit_scores=out,
+                                                                          gold_indices=gold_example).item()
+                        running_hit_rate += batch_wise_hit_rate
                         bar.update()
                         bar.set_description(f'Validation {epoch}/{self.epochs} - Loss {running_loss / idx:.3f} '
-                                            f'MRR {running_mrr / idx:.3f} HR {running_hit_rate / idx :.3f}')
+                                            f'MRR {running_rr / idx:.3f} HR {running_hit_rate / idx :.3f}')
 
-            running_loss, running_mrr, running_hit_rate = 0.0, 0.0, 0.0
+            running_loss, running_rr, running_hit_rate = 0.0, 0.0, 0.0
