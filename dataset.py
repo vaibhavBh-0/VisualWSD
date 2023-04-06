@@ -43,7 +43,8 @@ class DatasetConfig(Enum):
 
 class VWSDDataset(Dataset):
     def __init__(self, img_data_path: str, wsd_data_path: str, gold_data_path: str, config: DatasetConfig,
-                 image_processor: BaseImageProcessor, tokenizer: PreTrainedTokenizerFast, seed=42, split=0.8):
+                 image_processor: BaseImageProcessor, tokenizer: PreTrainedTokenizerFast, seed=42, split=0.8,
+                 device=torch.device('cpu')):
         self.img_data_path = img_data_path
         self.wsd_data_path = wsd_data_path
         self.gold_data_path = gold_data_path
@@ -55,6 +56,8 @@ class VWSDDataset(Dataset):
         self.sep = '[CONDITIONED]'
         self.fast_tokenizer.add_tokens(new_tokens=self.sep, special_tokens=True)
         self.model_max_length = self.fast_tokenizer.model_max_length
+        self.device = device
+        self.non_blocking = self.device.type != 'cpu'
 
         columns = ['word', 'context'] + [f'{a}{idx}' for idx, a in enumerate(['sample'] * 10, start=1)]
         df = pd.read_csv(self.wsd_data_path, sep='\t', names=columns)
@@ -145,6 +148,28 @@ class VWSDDataset(Dataset):
 
         return text_input, imgs, gold_example
 
+    def collate_dataset(self, items: list):
+        """
+        Function to manually batch the tensors. More specifically the image tensors.
+        :param items: List of data points from the __getitem__ method.
+        :return: tuple of correctly batched tensors.
+        """
+        batch_size = len(items)
+
+        text_inputs = {
+            key: torch.stack([items[idx][0][key] for idx in range(batch_size)])
+            .to(self.device, non_blocking=self.non_blocking)
+            for key in items[0][0].keys()
+        }
+
+        imgs = torch.cat([items[idx][1]['pixel_values'] for idx in range(batch_size)])\
+            .to(self.device, non_blocking=self.non_blocking)
+
+        gold_examples = torch.Tensor([items[idx][2] for idx in range(batch_size)])\
+            .to(self.device, non_blocking=self.non_blocking)
+
+        return text_inputs, imgs, gold_examples
+
 
 def test_dataset():
     # Testing dataset with DataLoader.
@@ -158,16 +183,22 @@ def test_dataset():
     img_processor = ConvNextImageProcessor()
     tokenizer = BertTokenizerFast.from_pretrained("bert-base-uncased")
 
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
     dataset = VWSDDataset(img_data_path=img_path, wsd_data_path=wsd_path, gold_data_path=gold_path,
                           config=DatasetConfig.TRAIN, image_processor=img_processor, tokenizer=tokenizer,
-                          split=1.0)
+                          split=1.0, device=device)
 
     from torch.utils.data import DataLoader
 
-    train_loader = DataLoader(dataset=dataset, batch_size=5, shuffle=False)
+    num_workers = 2
+
+    train_loader = DataLoader(dataset=dataset, batch_size=5, shuffle=False,
+                              collate_fn=dataset.collate_dataset, num_workers=num_workers)
 
     for idx, (txt, imgs, gold_example) in enumerate(train_loader, start=1):
-        print(f'Text shape {txt["input_ids"].shape} Image shape {imgs["pixel_values"].shape} gold example shape {gold_example.shape}')
+        print(f'Device {imgs.device.type}')
+        print(f'Text shape {txt["input_ids"].shape} Image shape {imgs.shape} gold example shape {gold_example.shape}')
         break
 
 

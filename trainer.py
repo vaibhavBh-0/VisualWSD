@@ -84,8 +84,15 @@ class Trainer:
                                   config=DatasetConfig.VAL, image_processor=img_processor, tokenizer=tokenizer,
                                   split=train_split_ratio, seed=splitting_seed)
 
-        self.train_dataloader = DataLoader(dataset=train_dataset, batch_size=self.train_batch_size, shuffle=True)
-        self.val_dataloader = DataLoader(dataset=val_dataset, batch_size=self.val_batch_size, shuffle=False)
+        # TODO: Decide on number of workers.
+        num_workers = min(os.cpu_count(), 8)
+
+        self.train_dataloader = DataLoader(dataset=train_dataset, batch_size=self.train_batch_size,
+                                           shuffle=True, collate_fn=train_dataset.collate_dataset,
+                                           num_workers=num_workers)
+        self.val_dataloader = DataLoader(dataset=val_dataset, batch_size=self.val_batch_size,
+                                         shuffle=False, collate_fn=val_dataset.collate_dataset,
+                                         num_workers=num_workers)
 
         # TODO: Choose optimizer for LiT/CLIP - training.
         #  LiT uses modified AdaFactor. - https://github.com/google-research/big_vision/blob/47ac2fd075fcb66cadc0e39bd959c78a6080070d/big_vision/optax.py#L157
@@ -173,19 +180,7 @@ class Trainer:
                 for idx, (txt, imgs, gold_example) in enumerate(self.train_dataloader, start=1):
                     self.optim.zero_grad()
 
-                    # txts = {key: val.to(self.device, non_blocking=True).repeat_interleave(repeats=IMG_SAMPLES, dim=0)[:2, :]
-                    #         for key, val in txt.items()}
-                    txts = {
-                        key: val.to(self.device, non_blocking=True)#[:2, :]
-                        for key, val in txt.items()
-                    }
-
-                    img_shape = imgs['pixel_values'].shape[2:]
-
-                    images = imgs['pixel_values'].to(self.device, non_blocking=True).reshape((-1, *img_shape))
-                    gold_examples = gold_example.to(self.device, non_blocking=True)
-
-                    out = self.model(text_data=txts, image_data=images, img_samples=IMG_SAMPLES)
+                    out = self.model(text_data=txt, image_data=imgs, img_samples=IMG_SAMPLES)
 
                     # TODO: - Compute LiT/CLIP loss.
 
@@ -216,10 +211,6 @@ class Trainer:
             with torch.no_grad():
                 with tqdm(total=len(self.val_dataloader), colour='red', leave=False) as bar:
                     for idx, (txt, imgs, gold_example) in enumerate(self.val_dataloader, start=1):
-                        txt = {key: val.to(self.device, non_blocking=True) for key, val in txt.items()}
-                        imgs = imgs['pixel_values'].to(self.device, non_blocking=True)
-                        gold_example = gold_example.to(self.device, non_blocking=True)
-
                         out = self.model(text_data=txt, image_data=imgs)
 
                         # TODO - Compute Validation Metrics for validation. Record on the three running metrics variables.
