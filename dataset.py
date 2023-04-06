@@ -85,7 +85,10 @@ class VWSDDataset(Dataset):
         :return: dehypenated
         """
 
-        return df.replace('-', ' ', regex=True)
+        for col in ['word', 'context']:
+            df[col] = df[col].apply(lambda x: x.replace('-', ' '))
+
+        return df
 
     @staticmethod
     def load_image(path) -> torch.Tensor:
