@@ -205,8 +205,8 @@ class Trainer:
                     running_hit_rate += batch_wise_hit_rate
 
                     avg_loss = running_loss / idx
-                    mrr = running_rr / idx
-                    avg_hit_rate = running_hit_rate / idx
+                    mrr = running_rr / (idx * self.train_batch_size)
+                    avg_hit_rate = running_hit_rate / (idx * self.train_batch_size)
 
                     self.writer.add_scalar('Loss/train', avg_loss)
                     self.writer.add_scalar('MRR/train', mrr)
@@ -235,7 +235,7 @@ class Trainer:
             with torch.no_grad():
                 with tqdm(total=len(self.val_dataloader), colour='red', leave=False) as bar:
                     for idx, (txt, imgs, gold_example) in enumerate(self.val_dataloader, start=1):
-                        out = self.model(text_data=txt, image_data=imgs)
+                        out = self.model(text_data=txt, image_data=imgs, img_samples=IMG_SAMPLES)
 
                         loss = self.loss_criterion(out, text_to_img_mapping=gold_example)
                         running_loss += loss.item()
@@ -249,8 +249,8 @@ class Trainer:
                         running_hit_rate += batch_wise_hit_rate
 
                         avg_loss = running_loss / idx
-                        mrr = running_rr / idx
-                        avg_hit_rate = running_hit_rate / idx
+                        mrr = running_rr / (idx * self.val_batch_size)
+                        avg_hit_rate = running_hit_rate / (idx * self.val_batch_size)
 
                         self.writer.add_scalar('Loss/val', avg_loss)
                         self.writer.add_scalar('MRR/val', mrr)
