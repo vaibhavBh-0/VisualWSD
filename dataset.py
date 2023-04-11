@@ -165,7 +165,7 @@ class VWSDDataset(Dataset):
         imgs = torch.cat([items[idx][1]['pixel_values'] for idx in range(batch_size)])\
             .to(self.device, non_blocking=self.non_blocking)
 
-        gold_examples = torch.Tensor([items[idx][2] for idx in range(batch_size)])\
+        gold_examples = torch.Tensor([items[idx][2] for idx in range(batch_size)]).type(torch.LongTensor)\
             .to(self.device, non_blocking=self.non_blocking)
 
         return text_inputs, imgs, gold_examples

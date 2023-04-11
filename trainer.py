@@ -81,14 +81,14 @@ class Trainer:
 
         train_dataset = VWSDDataset(img_data_path=img_path, wsd_data_path=wsd_path, gold_data_path=gold_path,
                                     config=DatasetConfig.TRAIN, image_processor=img_processor, tokenizer=tokenizer,
-                                    split=train_split_ratio, seed=splitting_seed)
+                                    split=train_split_ratio, seed=splitting_seed, device=self.device)
 
         val_dataset = VWSDDataset(img_data_path=img_path, wsd_data_path=wsd_path, gold_data_path=gold_path,
                                   config=DatasetConfig.VAL, image_processor=img_processor, tokenizer=tokenizer,
-                                  split=train_split_ratio, seed=splitting_seed)
+                                  split=train_split_ratio, seed=splitting_seed, device=self.device)
 
         # TODO: Decide on number of workers.
-        num_workers = min(os.cpu_count(), 8)
+        num_workers = min(os.cpu_count(), 0)
 
         self.writer = SummaryWriter(log_dir=self.model_log_path)
 

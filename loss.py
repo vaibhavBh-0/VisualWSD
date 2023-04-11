@@ -41,19 +41,6 @@ class LiTLoss(nn.Module):
 
         return loss
 
-    # clip loss as mentioned in "Learning Transferable Visual Models From Natural Language Supervision",
-    # refactored version of the hugging face implementation of VisionTextDualEncoderModel's source
-    @staticmethod
-    def contrastive_loss(logits: torch.Tensor) -> torch.Tensor:
-        return nn.functional.cross_entropy(logits, torch.arange(len(logits), device=logits.device))
-
-    # clip loss as mentioned in "Learning Transferable Visual Models From Natural Language Supervision",
-    # refactored version of the hugging face implementation of VisionTextDualEncoderModel's source
-    def clip_loss(self, similarity) -> torch.Tensor:
-        text_loss = self.contrastive_loss(similarity)
-        image_loss = self.contrastive_loss(similarity.t())
-        return (text_loss + image_loss) / 2.0
-
 
 if __name__ == '__main__':
     loss_criterion = LiTLoss()

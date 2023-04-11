@@ -35,8 +35,8 @@ parser.add_argument('--train_split_ratio', type=float, default=0.8)
 parser.add_argument('--splitting_seed', type=int, default=42)
 parser.add_argument('--epochs', type=int, default=10)
 parser.add_argument('--lr', type=float, default=0.001)
-parser.add_argument('--train_batch_size', type=int, default=5)
-parser.add_argument('--val_batch_size', type=int, default=5)
+parser.add_argument('--train_batch_size', type=int, default=16)
+parser.add_argument('--val_batch_size', type=int, default=16)
 
 parser.add_argument('--base_path', type=str,
                     help='Directory where training/evaluation dataset is present.', required=True)
