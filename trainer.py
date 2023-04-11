@@ -188,7 +188,7 @@ class Trainer:
 
                     out = self.model(text_data=txt, image_data=imgs, img_samples=IMG_SAMPLES)
 
-                    loss = self.loss_criterion(out)
+                    loss = self.loss_criterion(out, text_to_img_mapping=gold_example)
                     running_loss += loss.item()
 
                     loss.backward()
@@ -237,7 +237,7 @@ class Trainer:
                     for idx, (txt, imgs, gold_example) in enumerate(self.val_dataloader, start=1):
                         out = self.model(text_data=txt, image_data=imgs)
 
-                        loss = self.loss_criterion(out)
+                        loss = self.loss_criterion(out, text_to_img_mapping=gold_example)
                         running_loss += loss.item()
 
                         batch_wise_rr = RuntimeMetrics.reciprocal_rank_per_batch(logit_scores=out,
