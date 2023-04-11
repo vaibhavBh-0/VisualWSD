@@ -27,6 +27,7 @@ from enum import Enum
 import torch
 from tqdm import tqdm
 from torch.utils.data import DataLoader
+from torch.utils.tensorboard import SummaryWriter
 
 from transformers import BertTokenizerFast, ConvNextImageProcessor
 from transformers.optimization import Adafactor, AdafactorSchedule, get_cosine_schedule_with_warmup
@@ -56,7 +57,9 @@ class Trainer:
         gold_path = os.path.join(base_path, 'train_v1', 'train.gold.v1.txt')
 
         self.model_save_path = kwargs['model_save_path']
+        self.model_log_path = kwargs['model_log_path']
         os.makedirs(self.model_save_path, exist_ok=True)
+        os.makedirs(self.model_log_path, exist_ok=True)
 
         self.device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
@@ -86,6 +89,8 @@ class Trainer:
 
         # TODO: Decide on number of workers.
         num_workers = min(os.cpu_count(), 8)
+
+        self.writer = SummaryWriter(log_dir=self.model_log_path)
 
         self.train_dataloader = DataLoader(dataset=train_dataset, batch_size=self.train_batch_size,
                                            shuffle=True, collate_fn=train_dataset.collate_dataset,
@@ -191,13 +196,25 @@ class Trainer:
                     # Optim step.
                     self.optim.step()
 
-                    batch_wise_rr = RuntimeMetrics.reciprocal_rank_per_batch(logit_scores=out, gold_indices=gold_example, top_k=IMG_SAMPLES).item()
+                    batch_wise_rr = RuntimeMetrics.reciprocal_rank_per_batch(logit_scores=out, gold_indices=gold_example
+                                                                             , top_k=IMG_SAMPLES).item()
                     running_rr += batch_wise_rr
-                    batch_wise_hit_rate = RuntimeMetrics.hit_rate_at1(logit_scores=out, gold_indices=gold_example).item()
+                    batch_wise_hit_rate = RuntimeMetrics.hit_rate_at1(logit_scores=out, gold_indices=gold_example)\
+                        .item()
+
                     running_hit_rate += batch_wise_hit_rate
+
+                    avg_loss = running_loss / idx
+                    mrr = running_rr / idx
+                    avg_hit_rate = running_hit_rate / idx
+
+                    self.writer.add_scalar('Loss/train', avg_loss)
+                    self.writer.add_scalar('MRR/train', mrr)
+                    self.writer.add_scalar('HR/train', avg_hit_rate)
+
                     bar.update()
-                    bar.set_description(f'Training {epoch}/{self.epochs} - Loss {running_loss / idx:.3f} '
-                                        f'MRR {running_rr / idx:.3f} HR {running_hit_rate / idx :.3f}')
+                    bar.set_description(f'Training {epoch}/{self.epochs} - Loss {avg_loss:.3f} MRR {mrr:.3f} '
+                                        f'HR {avg_hit_rate :.3f}')
 
             # LR Scheduler Chaining.
             self.optim_lr_scheduler.step()
@@ -230,8 +247,17 @@ class Trainer:
                         batch_wise_hit_rate = RuntimeMetrics.hit_rate_at1(logit_scores=out,
                                                                           gold_indices=gold_example).item()
                         running_hit_rate += batch_wise_hit_rate
+
+                        avg_loss = running_loss / idx
+                        mrr = running_rr / idx
+                        avg_hit_rate = running_hit_rate / idx
+
+                        self.writer.add_scalar('Loss/val', avg_loss)
+                        self.writer.add_scalar('MRR/val', mrr)
+                        self.writer.add_scalar('HR/val', avg_hit_rate)
+
                         bar.update()
-                        bar.set_description(f'Validation {epoch}/{self.epochs} - Loss {running_loss / idx:.3f} '
-                                            f'MRR {running_rr / idx:.3f} HR {running_hit_rate / idx :.3f}')
+                        bar.set_description(f'Validation {epoch}/{self.epochs} - Loss {avg_loss:.3f} '
+                                            f'MRR {mrr:.3f} HR {avg_hit_rate :.3f}')
 
             running_loss, running_rr, running_hit_rate = 0.0, 0.0, 0.0

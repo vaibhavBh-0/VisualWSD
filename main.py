@@ -41,6 +41,8 @@ parser.add_argument('--val_batch_size', type=int, default=5)
 parser.add_argument('--base_path', type=str,
                     help='Directory where training/evaluation dataset is present.', required=True)
 parser.add_argument('--model_save_path', type=str, help='Directory where model is to be saved.', required=True)
+parser.add_argument('--model_log_path', type=str,
+                    help='Directory where tensorboard logs are to be saved.', required=True)
 
 parser.add_argument('--embedding_dim', type=int, default=128)
 parser.add_argument('--scale_factor', type=float, default=2.6592)
