@@ -116,7 +116,7 @@ class Trainer:
         # CosineAnnealingLR(self.optim, )
 
         # Cosine Annealing - As per the authors of LiT.
-        warm_up_steps = 10000
+        warm_up_steps = int(10000 / 55000 * len(self.train_dataloader))
         total_train_steps = len(self.train_dataloader)
 
         self.cosine_annealing_lr = get_cosine_schedule_with_warmup(self.optim, num_warmup_steps=warm_up_steps,
