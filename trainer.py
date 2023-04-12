@@ -87,7 +87,6 @@ class Trainer:
                                   config=DatasetConfig.VAL, image_processor=img_processor, tokenizer=tokenizer,
                                   split=train_split_ratio, seed=splitting_seed, device=self.device)
 
-        # TODO: Decide on number of workers.
         num_workers = min(os.cpu_count(), 0)
 
         self.writer = SummaryWriter(log_dir=self.model_log_path)
@@ -100,8 +99,8 @@ class Trainer:
                                          num_workers=num_workers)
 
         self.loss_criterion = LiTLoss()
-        # TODO: Choose optimizer for LiT/CLIP - training.
-        #  LiT uses modified AdaFactor. - https://github.com/google-research/big_vision/blob/47ac2fd075fcb66cadc0e39bd959c78a6080070d/big_vision/optax.py#L157
+        #  LiT uses modified AdaFactor.
+        #  https://github.com/google-research/big_vision/blob/47ac2fd075fcb66cadc0e39bd959c78a6080070d/big_vision/optax.py#L157
         #  CLIP uses Adam.
 
         self.model = LiT(embedding_dim=embedding_dim, vision_model_path=vision_model_path,
@@ -113,9 +112,7 @@ class Trainer:
 
         self.optim_lr_scheduler = AdafactorSchedule(optimizer=self.optim, initial_lr=self.lr)
 
-        # CosineAnnealingLR(self.optim, )
-
-        # Cosine Annealing - As per the authors of LiT.
+        # Cosine Annealing - As per the authors of LiT - Rescaled warmup_steps.
         warm_up_steps = int(10000 / 55000 * len(self.train_dataloader))
         total_train_steps = len(self.train_dataloader)
 
@@ -222,8 +219,8 @@ class Trainer:
 
             extra = {
                 'loss': running_loss / len(self.train_dataloader),
-                'mrr': running_rr / len(self.train_dataloader),
-                'hit_rate': running_hit_rate / len(self.train_dataloader)
+                'mrr': running_rr / (self.train_batch_size * len(self.train_dataloader)),
+                'hit_rate': running_hit_rate / (self.train_batch_size * len(self.train_dataloader))
             }
 
             self._save_model_state(current_epoch=epoch, **extra)

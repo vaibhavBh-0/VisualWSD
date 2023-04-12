@@ -21,21 +21,22 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
+
 import torch
 import torch.nn as nn
 
 
 class LiTLoss(nn.Module):
 
-    def forward(self, similarity: torch.Tensor, text_to_img_mapping: torch.Tensor):
-        text_loss = nn.functional.cross_entropy(similarity, target=text_to_img_mapping)
-        img_to_text_mapping_target_mask = torch.zeros_like(similarity, device=similarity.device).T
+    def forward(self, text_to_img_logit: torch.Tensor, text_to_img_mapping: torch.Tensor):
+        text_loss = nn.functional.cross_entropy(text_to_img_logit, target=text_to_img_mapping)
+        img_to_text_mapping_target_mask = torch.zeros_like(text_to_img_logit, device=text_to_img_logit.device).T
 
         # Not all images will have corresponding correct mapping to text.
         for idx, val in enumerate(text_to_img_mapping.tolist()):
             img_to_text_mapping_target_mask[val, idx] = 1.0
 
-        visual_loss = nn.functional.cross_entropy(similarity.T, target=img_to_text_mapping_target_mask)
+        visual_loss = nn.functional.cross_entropy(text_to_img_logit.T, target=img_to_text_mapping_target_mask)
 
         loss = (text_loss + visual_loss) / 2.0
 

@@ -126,7 +126,7 @@ class VWSDDataset(Dataset):
 
         text_input = {key: value.squeeze() for key, value in text_input.items()}
 
-        # TODO: Current Mining Scheme is only going as per the dataset.
+        # Future Work: Current Mining Scheme is only going as per the dataset.
         #  We can go for more negative image examples based on the "word" not conditioned on "context".
 
         img_paths = data_point[2:] if self._config == DatasetConfig.TEST else data_point[2:-1]
