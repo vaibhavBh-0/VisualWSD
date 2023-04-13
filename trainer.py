@@ -205,9 +205,9 @@ class Trainer:
                     mrr = running_rr / (idx * self.train_batch_size)
                     avg_hit_rate = running_hit_rate / (idx * self.train_batch_size)
 
-                    self.writer.add_scalar('Loss/train', avg_loss)
-                    self.writer.add_scalar('MRR/train', mrr)
-                    self.writer.add_scalar('HR/train', avg_hit_rate)
+                    self.writer.add_scalar('Loss/train', avg_loss, global_step=idx)
+                    self.writer.add_scalar('MRR/train', mrr, global_step=idx)
+                    self.writer.add_scalar('HR/train', avg_hit_rate, global_step=idx)
 
                     bar.update()
                     bar.set_description(f'Training {epoch}/{self.epochs} - Loss {avg_loss:.3f} MRR {mrr:.3f} '
@@ -249,9 +249,9 @@ class Trainer:
                         mrr = running_rr / (idx * self.val_batch_size)
                         avg_hit_rate = running_hit_rate / (idx * self.val_batch_size)
 
-                        self.writer.add_scalar('Loss/val', avg_loss)
-                        self.writer.add_scalar('MRR/val', mrr)
-                        self.writer.add_scalar('HR/val', avg_hit_rate)
+                        self.writer.add_scalar('Loss/val', avg_loss, global_step=idx)
+                        self.writer.add_scalar('MRR/val', mrr, global_step=idx)
+                        self.writer.add_scalar('HR/val', avg_hit_rate, global_step=idx)
 
                         bar.update()
                         bar.set_description(f'Validation {epoch}/{self.epochs} - Loss {avg_loss:.3f} '
