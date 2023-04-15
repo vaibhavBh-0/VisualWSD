@@ -49,6 +49,7 @@ parser.add_argument('--scale_factor', type=float, default=2.6592)
 
 parser.add_argument('--text_encoder', type=int, default=1, help='Choose the text encoder.')
 parser.add_argument('--vision_encoder', type=int, default=1, help='Choose the vision encoder.')
+parser.add_argument('--evaluation_epoch_index', type=int, default=1, help='Choose the evaluation epoch checkpoint.')
 
 
 def create_trainer(arguments: Namespace) -> Trainer:
@@ -78,7 +79,10 @@ def train(arguments: Namespace):
 
 
 def evaluate(arguments: Namespace):
-    raise NotImplementedError('evaluation not implemented yet.')
+    trainer = create_trainer(arguments)
+    evaluation_epoch_index = arguments.evaluation_epoch_index
+    #trainer.evaluate(epoch_index=evaluation_epoch_index)
+    trainer.evaluate()
 
 
 if __name__ == '__main__':
