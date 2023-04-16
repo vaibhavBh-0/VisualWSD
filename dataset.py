@@ -174,7 +174,6 @@ class VWSDDataset(Dataset):
 def test_dataset():
     # Testing dataset with DataLoader.
     base_path = '' #os.path.join('C:\\', 'Users', 'Vaibhav', 'Downloads', 'semeval-2023-task-1-V-WSD-train-v1')
-    base_path= '/Users/sharadc/Documents/uic/semester2/CS521/project/semeval-2023-task-1-V-WSD-train-v1'
     img_path = os.path.join(base_path, 'train_v1', 'train_images_v1')
     wsd_path = os.path.join(base_path, 'train_v1', 'train.data.v1.txt')
     gold_path = os.path.join(base_path, 'train_v1', 'train.gold.v1.txt')
