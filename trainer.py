@@ -49,10 +49,6 @@ class VisionConfig(Enum):
     CONV_NEXT_V2 = 1
 
 
-class RunningMode(Enum):
-    TRAIN = 0
-    EVALUATE = 1
-
 class Trainer:
     def __init__(self, text_config: TextConfig, vision_config: VisionConfig, **kwargs):
         base_path = kwargs['base_path']
@@ -79,7 +75,7 @@ class Trainer:
 
         self.train_batch_size = kwargs.get('train_batch_size', 5)
         self.val_batch_size = kwargs.get('val_batch_size', 5)
-        self.execute = kwargs.get("execute", 0)
+        self.is_train = kwargs.get("execute")
 
         text_enc, text_model_path, tokenizer = self._select_text_encoder(text_config)
         vision_enc, vision_model_path, img_processor = self._select_img_encoder(vision_config)
@@ -96,23 +92,9 @@ class Trainer:
 
         self.writer = SummaryWriter(log_dir=self.model_log_path)
 
-        if self.execute == RunningMode.TRAIN.value:
-            self.train_dataloader = DataLoader(dataset=train_dataset, batch_size=self.train_batch_size,
-                                               shuffle=True, collate_fn=train_dataset.collate_dataset,
-                                               num_workers=num_workers)
-
-            self.optim = Adafactor(self.model.parameters(), warmup_init=True)
-
-            self.optim_lr_scheduler = AdafactorSchedule(optimizer=self.optim, initial_lr=self.lr)
-
-            # Cosine Annealing - As per the authors of LiT - Rescaled warmup_steps.
-            warm_up_steps = int(10000 / 55000 * len(self.train_dataloader))
-            total_train_steps = len(self.train_dataloader)
-
-            self.cosine_annealing_lr = get_cosine_schedule_with_warmup(self.optim, num_warmup_steps=warm_up_steps,
-                                                                       num_training_steps=total_train_steps)
-
-
+        self.train_dataloader = DataLoader(dataset=train_dataset, batch_size=self.train_batch_size,
+                                           shuffle=True, collate_fn=train_dataset.collate_dataset,
+                                           num_workers=num_workers)
         self.val_dataloader = DataLoader(dataset=val_dataset, batch_size=self.val_batch_size,
                                          shuffle=False, collate_fn=val_dataset.collate_dataset,
                                          num_workers=num_workers)
@@ -127,11 +109,19 @@ class Trainer:
                          tokenizer_len=len(tokenizer), vision_encoder=vision_enc, text_encoder=text_enc,
                          logit_scale_init_value=scale_factor).to(device=self.device, non_blocking=True)
 
-        if self.execute == RunningMode.TRAIN.value:
-            self._load_model_state()
-        else:
-            evaluation_epoch_index = kwargs.get("evaluation_epoch_index") if "evaluation_epoch_index" in kwargs else -1
-            self._load_model_state(index=evaluation_epoch_index-1)
+        self.optim = Adafactor(self.model.parameters(), warmup_init=True)
+
+        self.optim_lr_scheduler = AdafactorSchedule(optimizer=self.optim, initial_lr=self.lr)
+
+        # Cosine Annealing - As per the authors of LiT - Rescaled warmup_steps.
+        warm_up_steps = int(10000 / 55000 * len(self.train_dataloader))
+        total_train_steps = len(self.train_dataloader)
+
+        self.cosine_annealing_lr = get_cosine_schedule_with_warmup(self.optim, num_warmup_steps=warm_up_steps,
+                                                                   num_training_steps=total_train_steps)
+
+        evaluation_epoch_index = kwargs.get("evaluation_epoch_index")
+        self._load_model_state(index=evaluation_epoch_index)
 
     @staticmethod
     def _select_text_encoder(text_config: TextConfig):
@@ -158,21 +148,17 @@ class Trainer:
         Load the model state from checkpoints if any.
         param index: Loads the checkpoint based on created date index. Defaults to -1 to load the latest checkpoint.
         """
-        items = os.listdir(self.model_save_path)
-        items = [os.path.join(self.model_save_path, item) for item in items]
+        items = [os.path.join(self.model_save_path, item) for item in os.listdir(self.model_save_path)]
         if items:
-            latest_item = sorted(items, key=os.path.getctime)[index]
-            checkpoint_path = os.path.join(self.model_save_path, latest_item)
+            checkpoint_path = sorted(items, key=os.path.getctime)[index]
 
             checkpoint = torch.load(checkpoint_path, map_location=self.device)
             self.model.load_state_dict(checkpoint['model'], strict=True)
 
-            #meaning this is is train mode
-            if self.execute == RunningMode.TRAIN.value:
-                self.model.train()
-                self.optim.load_state_dict(checkpoint['optim'])
-                self.optim_lr_scheduler.load_state_dict(checkpoint['ada_factor_scheduler'])
-                self.cosine_annealing_lr.load_state_dict(checkpoint['cosine_annealing_scheduler'])
+            self.model.train()
+            self.optim.load_state_dict(checkpoint['optim'])
+            self.optim_lr_scheduler.load_state_dict(checkpoint['ada_factor_scheduler'])
+            self.cosine_annealing_lr.load_state_dict(checkpoint['cosine_annealing_scheduler'])
 
             self.current_epoch = 1 + checkpoint['epoch']
 
@@ -278,31 +264,31 @@ class Trainer:
         self.model.eval()
         running_loss, running_rr, running_hit_rate = 0.0, 0.0, 0.0
         IMG_SAMPLES = 10
-        for epoch in range(self.current_epoch, self.epochs + 1):
-            with torch.no_grad():
-                with tqdm(total=len(self.val_dataloader), colour='red', leave=False) as bar:
-                    for idx, (txt, imgs, gold_example) in enumerate(self.val_dataloader, start=1):
-                        out = self.model(text_data=txt, image_data=imgs, img_samples=IMG_SAMPLES)
+        with torch.no_grad():
+            with tqdm(total=len(self.val_dataloader), colour='red', leave=False) as bar:
+                for idx, (txt, imgs, gold_example) in enumerate(self.val_dataloader, start=1):
+                    out = self.model(text_data=txt, image_data=imgs, img_samples=IMG_SAMPLES)
 
-                        loss = self.loss_criterion(out, text_to_img_mapping=gold_example)
-                        running_loss += loss.item()
+                    loss = self.loss_criterion(out, text_to_img_mapping=gold_example)
+                    running_loss += loss.item()
 
-                        batch_wise_rr = RuntimeMetrics.reciprocal_rank_per_batch(logit_scores=out,
-                                                                                 gold_indices=gold_example,
-                                                                                 top_k=IMG_SAMPLES).item()
-                        running_rr += batch_wise_rr
-                        batch_wise_hit_rate = RuntimeMetrics.hit_rate_at1(logit_scores=out,
-                                                                          gold_indices=gold_example).item()
-                        running_hit_rate += batch_wise_hit_rate
+                    batch_wise_rr = RuntimeMetrics.reciprocal_rank_per_batch(logit_scores=out,
+                                                                             gold_indices=gold_example,
+                                                                             top_k=IMG_SAMPLES).item()
+                    running_rr += batch_wise_rr
+                    batch_wise_hit_rate = RuntimeMetrics.hit_rate_at1(logit_scores=out,
+                                                                      gold_indices=gold_example).item()
+                    running_hit_rate += batch_wise_hit_rate
 
-                        avg_loss = running_loss / idx
-                        mrr = running_rr / (idx * self.val_batch_size)
-                        avg_hit_rate = running_hit_rate / (idx * self.val_batch_size)
+                    avg_loss = running_loss / idx
+                    mrr = running_rr / (idx * self.val_batch_size)
+                    avg_hit_rate = running_hit_rate / (idx * self.val_batch_size)
 
-                        self.writer.add_scalar('Loss/val', avg_loss, global_step=idx)
-                        self.writer.add_scalar('MRR/val', mrr, global_step=idx)
-                        self.writer.add_scalar('HR/val', avg_hit_rate, global_step=idx)
+                    self.writer.add_scalar('Loss/val', avg_loss, global_step=idx)
+                    self.writer.add_scalar('MRR/val', mrr, global_step=idx)
+                    self.writer.add_scalar('HR/val', avg_hit_rate, global_step=idx)
 
-                        bar.update()
-                        bar.set_description(f'Validation {epoch}/{self.epochs} - Loss {avg_loss:.3f} '
-                                            f'MRR {mrr:.3f} HR {avg_hit_rate :.3f}')
+                    bar.update()
+                    bar.set_description(f'Validation Loss {avg_loss:.3f} '
+                                        f'MRR {mrr:.3f} HR {avg_hit_rate :.3f}')
+
