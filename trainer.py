@@ -75,6 +75,7 @@ class Trainer:
 
         self.train_batch_size = kwargs.get('train_batch_size', 5)
         self.val_batch_size = kwargs.get('val_batch_size', 5)
+        self.is_train = kwargs.get("execute")
 
         text_enc, text_model_path, tokenizer = self._select_text_encoder(text_config)
         vision_enc, vision_model_path, img_processor = self._select_img_encoder(vision_config)
@@ -119,7 +120,8 @@ class Trainer:
         self.cosine_annealing_lr = get_cosine_schedule_with_warmup(self.optim, num_warmup_steps=warm_up_steps,
                                                                    num_training_steps=total_train_steps)
 
-        self._load_model_state()
+        evaluation_epoch_index = kwargs.get("evaluation_epoch_index")
+        self._load_model_state(index=evaluation_epoch_index)
 
     @staticmethod
     def _select_text_encoder(text_config: TextConfig):
@@ -146,15 +148,14 @@ class Trainer:
         Load the model state from checkpoints if any.
         param index: Loads the checkpoint based on created date index. Defaults to -1 to load the latest checkpoint.
         """
-        items = os.listdir(self.model_save_path)
+        items = [os.path.join(self.model_save_path, item) for item in os.listdir(self.model_save_path)]
         if items:
-            latest_item = sorted(items, key=os.path.getctime)[index]
-            checkpoint_path = os.path.join(self.model_save_path, latest_item)
+            checkpoint_path = sorted(items, key=os.path.getctime)[index]
 
             checkpoint = torch.load(checkpoint_path, map_location=self.device)
             self.model.load_state_dict(checkpoint['model'], strict=True)
-            self.model.train()
 
+            self.model.train()
             self.optim.load_state_dict(checkpoint['optim'])
             self.optim_lr_scheduler.load_state_dict(checkpoint['ada_factor_scheduler'])
             self.cosine_annealing_lr.load_state_dict(checkpoint['cosine_annealing_scheduler'])
@@ -266,3 +267,36 @@ class Trainer:
                                             f'MRR {mrr:.3f} HR {avg_hit_rate :.3f}')
 
             running_loss, running_rr, running_hit_rate = 0.0, 0.0, 0.0
+
+    def evaluate(self):
+        self.model.eval()
+        running_loss, running_rr, running_hit_rate = 0.0, 0.0, 0.0
+        IMG_SAMPLES = 10
+        with torch.no_grad():
+            with tqdm(total=len(self.val_dataloader), colour='red', leave=False) as bar:
+                for idx, (txt, imgs, gold_example) in enumerate(self.val_dataloader, start=1):
+                    out = self.model(text_data=txt, image_data=imgs, img_samples=IMG_SAMPLES)
+
+                    loss = self.loss_criterion(out, text_to_img_mapping=gold_example)
+                    running_loss += loss.item()
+
+                    batch_wise_rr = RuntimeMetrics.reciprocal_rank_per_batch(logit_scores=out,
+                                                                             gold_indices=gold_example,
+                                                                             top_k=IMG_SAMPLES).item()
+                    running_rr += batch_wise_rr
+                    batch_wise_hit_rate = RuntimeMetrics.hit_rate_at1(logit_scores=out,
+                                                                      gold_indices=gold_example).item()
+                    running_hit_rate += batch_wise_hit_rate
+
+                    avg_loss = running_loss / idx
+                    mrr = running_rr / (idx * self.val_batch_size)
+                    avg_hit_rate = running_hit_rate / (idx * self.val_batch_size)
+
+                    self.writer.add_scalar('Loss/val', avg_loss, global_step=idx - 1)
+                    self.writer.add_scalar('MRR/val', mrr, global_step=idx - 1)
+                    self.writer.add_scalar('HR/val', avg_hit_rate, global_step=idx - 1)
+
+                    bar.update()
+                    bar.set_description(f'Validation Loss {avg_loss:.3f} '
+                                        f'MRR {mrr:.3f} HR {avg_hit_rate :.3f}')
+
