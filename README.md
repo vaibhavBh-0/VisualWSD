@@ -38,9 +38,9 @@ python main.py --execute 1 --base_path "<DATASET_DIR>" --model_save_path "<SAVE_
 
 ### Results
 Training Results
-1. Loss <img src="results/loss_metric.png">
-2. Mean Reciprocal Rank <img src="results/MRR_metric.png">
-3. Hit rate @ 1 <img src="results/HR_metric.png">
+1. Loss <br> <img src="results/loss_metric.png"> <br>
+2. Mean Reciprocal Rank <br> <img src="results/MRR_metric.png"> <br>
+3. Hit rate @ 1 <br> <img src="results/HR_metric.png"> <br>
 ### Future work
 Due to the limited access to better hardware we were limited to one experiment, in the future we can
 1. Perform hyperparameter search.
