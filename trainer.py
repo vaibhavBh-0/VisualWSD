@@ -180,6 +180,8 @@ class Trainer:
         for epoch in range(self.current_epoch, self.epochs + 1):
             self.model.train()
 
+            global_step = (epoch - 1) * len(self.train_dataloader)
+
             with tqdm(total=len(self.train_dataloader), colour='cyan', leave=True) as bar:
                 for idx, (txt, imgs, gold_example) in enumerate(self.train_dataloader, start=1):
                     self.optim.zero_grad()
@@ -206,9 +208,11 @@ class Trainer:
                     mrr = running_rr / (idx * self.train_batch_size)
                     avg_hit_rate = running_hit_rate / (idx * self.train_batch_size)
 
-                    self.writer.add_scalar('Loss/train', avg_loss, global_step=idx)
-                    self.writer.add_scalar('MRR/train', mrr, global_step=idx)
-                    self.writer.add_scalar('HR/train', avg_hit_rate, global_step=idx)
+                    self.writer.add_scalar('Loss/train', avg_loss, global_step=global_step)
+                    self.writer.add_scalar('MRR/train', mrr, global_step=global_step)
+                    self.writer.add_scalar('HR/train', avg_hit_rate, global_step=global_step)
+
+                    global_step += idx
 
                     bar.update()
                     bar.set_description(f'Training {epoch}/{self.epochs} - Loss {avg_loss:.3f} MRR {mrr:.3f} '
@@ -230,6 +234,8 @@ class Trainer:
 
             self.model.eval()
 
+            global_step = (epoch - 1) * len(self.val_dataloader)
+
             with torch.no_grad():
                 with tqdm(total=len(self.val_dataloader), colour='red', leave=False) as bar:
                     for idx, (txt, imgs, gold_example) in enumerate(self.val_dataloader, start=1):
@@ -250,9 +256,11 @@ class Trainer:
                         mrr = running_rr / (idx * self.val_batch_size)
                         avg_hit_rate = running_hit_rate / (idx * self.val_batch_size)
 
-                        self.writer.add_scalar('Loss/val', avg_loss, global_step=idx)
-                        self.writer.add_scalar('MRR/val', mrr, global_step=idx)
-                        self.writer.add_scalar('HR/val', avg_hit_rate, global_step=idx)
+                        self.writer.add_scalar('Loss/val', avg_loss, global_step=global_step)
+                        self.writer.add_scalar('MRR/val', mrr, global_step=global_step)
+                        self.writer.add_scalar('HR/val', avg_hit_rate, global_step=global_step)
+
+                        global_step += idx
 
                         bar.update()
                         bar.set_description(f'Validation {epoch}/{self.epochs} - Loss {avg_loss:.3f} '
