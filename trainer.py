@@ -292,9 +292,9 @@ class Trainer:
                     mrr = running_rr / (idx * self.val_batch_size)
                     avg_hit_rate = running_hit_rate / (idx * self.val_batch_size)
 
-                    self.writer.add_scalar('Loss/val', avg_loss, global_step=idx)
-                    self.writer.add_scalar('MRR/val', mrr, global_step=idx)
-                    self.writer.add_scalar('HR/val', avg_hit_rate, global_step=idx)
+                    self.writer.add_scalar('Loss/val', avg_loss, global_step=idx - 1)
+                    self.writer.add_scalar('MRR/val', mrr, global_step=idx - 1)
+                    self.writer.add_scalar('HR/val', avg_hit_rate, global_step=idx - 1)
 
                     bar.update()
                     bar.set_description(f'Validation Loss {avg_loss:.3f} '
