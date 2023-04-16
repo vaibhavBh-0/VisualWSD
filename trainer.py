@@ -212,7 +212,7 @@ class Trainer:
                     self.writer.add_scalar('MRR/train', mrr, global_step=global_step)
                     self.writer.add_scalar('HR/train', avg_hit_rate, global_step=global_step)
 
-                    global_step += idx
+                    global_step += 1
 
                     bar.update()
                     bar.set_description(f'Training {epoch}/{self.epochs} - Loss {avg_loss:.3f} MRR {mrr:.3f} '
@@ -260,7 +260,7 @@ class Trainer:
                         self.writer.add_scalar('MRR/val', mrr, global_step=global_step)
                         self.writer.add_scalar('HR/val', avg_hit_rate, global_step=global_step)
 
-                        global_step += idx
+                        global_step += 1
 
                         bar.update()
                         bar.set_description(f'Validation {epoch}/{self.epochs} - Loss {avg_loss:.3f} '
